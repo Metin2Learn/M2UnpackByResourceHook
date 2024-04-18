@@ -8,6 +8,40 @@
 #include <filesystem>
 #include "detours.h"
 
+
+#include <fstream>
+#include <sstream>
+
+void DebugLog(const char* c_szLogData)
+{
+	std::ofstream outFile("debug.log", std::ios::app); 
+	if (outFile.is_open())
+	{
+		outFile << c_szLogData << std::endl; 
+		outFile.close(); 
+	}
+}
+
+void __DebugLogf(const char* c_szFormat, ...)
+{
+	char szBuffer[16000];
+
+	va_list vaArgList;
+	va_start(vaArgList, c_szFormat);
+	vsprintf_s(szBuffer, c_szFormat, vaArgList);
+	va_end(vaArgList);
+
+	DebugLog(szBuffer);
+}
+
+#ifdef _DEBUG
+#define DebugLogf(log, ...)    __DebugLogf(log, __VA_ARGS__);
+#else
+#define DebugLogf(log, ...)
+#endif
+
+
+
 #define NtCurrentProcess ((HANDLE)-1)
 
 bool Mem2File(const std::string& strFileName, uint8_t* pBuffer, uint32_t dwSize)
@@ -15,7 +49,7 @@ bool Mem2File(const std::string& strFileName, uint8_t* pBuffer, uint32_t dwSize)
 	auto hFile = CreateFileA(strFileName.c_str(), FILE_APPEND_DATA, NULL, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (!hFile || hFile == INVALID_HANDLE_VALUE)
 	{
-		OutputDebugStringA(std::to_string(GetLastError()).c_str());
+		DebugLogf(std::to_string(GetLastError()).c_str());
 		MessageBoxA(0, "CreateFileA fail!", 0, 0);
 		return false;
 	}
@@ -34,7 +68,7 @@ bool Mem2File(const std::string& strFileName, uint8_t* pBuffer, uint32_t dwSize)
 	{
 		char fileinf[1024];
 		sprintf_s(fileinf, "WriteFile: %d (%u/%u) err: %u", bWritten, dwSize, dwWritedBytes, GetLastError());
-		OutputDebugStringA(fileinf);
+		DebugLogf(fileinf);
 
 		MessageBoxA(0, "WriteFile fail!", 0, 0);
 		CloseHandle(hFile);
@@ -102,7 +136,7 @@ int __fastcall ResourceOnLoadDetour(void* This, void* edx, DWORD iSize, DWORD c_
 
 	char msg[1024];
 	sprintf_s(msg, "ResourceOnLoadDetour: %p(%s) -- %p - %p / %p", This, szName, c_pvBuf, iSize, dwUnk1);
-	OutputDebugStringA(msg);
+	DebugLogf(msg);
 
 	auto ret = oldFunc(This, iSize, c_pvBuf, dwUnk1);
 
@@ -120,13 +154,13 @@ int __fastcall ResourceOnLoadDetour(void* This, void* edx, DWORD iSize, DWORD c_
 	auto output = "dump\\" + stName;
 
 	// exist file
+	/*
 	if (std::experimental::filesystem::exists(output))
 	{
 		DetourRemove((PBYTE)oldFunc, (PBYTE)ResourceOnLoadDetour);
-//		g_resourceContainer.erase(it);
 		return ret;
 	}
-
+	*/
 	auto directories = DirectoryList(output);
 	if (directories.empty() == false)
 	{
@@ -156,7 +190,7 @@ void __fastcall ResourceLoadDetour(void* This, void* edx)
 
 	char msg[1024];
 	sprintf_s(msg, "ResourceLoadDetour: %p(%s) %p hooks %u", This, szName, dwOnLoad, g_resourceContainer.size());
-	OutputDebugStringA(msg);
+	DebugLogf(msg);
 
 	if (g_resourceContainer.find(This) != g_resourceContainer.end() || strstr(szName, "dust.dds"))
 		return ResourceLoad(This);
@@ -178,6 +212,23 @@ void MainRoutine()
 	}
 }
 
+DWORD WINAPI Initialize(LPVOID)
+{
+	for (;;)
+	{
+		if (GetAsyncKeyState(VK_F5) & 0x8000) // down key
+		{
+			while (GetAsyncKeyState(VK_F5) & 0x8000) // wait for up key
+				Sleep(1);
+
+			MainRoutine();
+			return 0;
+		}
+		Sleep(100);
+	}
+	return 0;
+}
+
 BOOL APIENTRY DllMain(HMODULE, DWORD, LPVOID)
 {
 	static auto initialized = false;
@@ -185,7 +236,7 @@ BOOL APIENTRY DllMain(HMODULE, DWORD, LPVOID)
 	if (initialized == false)
 	{
 		initialized = true;
-		MainRoutine();
+		CreateThread(0, 0, Initialize, 0, 0, 0);
 	}
 
 	return TRUE;
