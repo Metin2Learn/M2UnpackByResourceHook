@@ -122,6 +122,7 @@ typedef int(__thiscall* TResourceOnLoad)(void* This, DWORD iSize, DWORD c_pvBuf,
 
 int __fastcall ResourceOnLoadDetour(void* This, void* edx, DWORD iSize, DWORD c_pvBuf, DWORD dwUnk1)
 {
+	DebugLogf("===========ResourceOnLoadDetour");
 	TResourceOnLoad oldFunc = nullptr;
 
 	auto it = g_resourceContainer.find(This);
@@ -182,6 +183,7 @@ static TResourceLoad ResourceLoad = nullptr;
 
 void __fastcall ResourceLoadDetour(void* This, void* edx)
 {
+	DebugLogf("===========ResourceLoadDetour");
 	char* szName = (char*)((DWORD)This + 8);
 //	if (*(DWORD*)((DWORD)This + 32) >= 0x10)
 //		szName = (char*)(*(DWORD*)szName);
@@ -204,11 +206,15 @@ void __fastcall ResourceLoadDetour(void* This, void* edx)
 
 void MainRoutine()
 {
-	ResourceLoad = (TResourceLoad)DetourFunction((PBYTE)0x005347C0, (PBYTE)ResourceLoadDetour);
+	DebugLogf("===========MainRoutine");// 0x005347C0  00490219
+	ResourceLoad = (TResourceLoad)DetourFunction((PBYTE)0x00490219, (PBYTE)ResourceLoadDetour);
+	DebugLogf("DetourFunction ! Error: %u", GetLastError());
 	if (!ResourceLoad)
 	{
 		MessageBoxA(0, "Hook fail", 0, 0);
 		return;
+	} else {
+		MessageBoxA(0, "Hook success", 0, 0);
 	}
 }
 
@@ -216,9 +222,9 @@ DWORD WINAPI Initialize(LPVOID)
 {
 	for (;;)
 	{
-		if (GetAsyncKeyState(VK_F5) & 0x8000) // down key
+		if (GetAsyncKeyState(VK_F8) & 0x8000) // down key
 		{
-			while (GetAsyncKeyState(VK_F5) & 0x8000) // wait for up key
+			while (GetAsyncKeyState(VK_F8) & 0x8000) // wait for up key
 				Sleep(1);
 
 			MainRoutine();
